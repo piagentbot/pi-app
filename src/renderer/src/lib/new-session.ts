@@ -23,7 +23,22 @@ export async function materializePendingNewSession(workspaceId: string, firstMes
 
   store.clearPendingNewSessionPlaceholder()
   store.setCurrentSession(sessionId)
-  // 勿 loadHistoryItems([])：首条发送前 Composer 已 append 乐观气泡
+  // Drop stale timeline items left over from the previously-viewed conversation:
+  // while no session file was bound (home/pending view), that worker's events
+  // route as visible and can repopulate the list. Keep only the trailing
+  // optimistic pair just appended for this first message — the worker echoes the
+  // real user message once the prompt is sent.
+  const items = useUIStore.getState().timelineItems || []
+  let lastOptUser = -1
+  for (let i = items.length - 1; i >= 0; i--) {
+    if (items[i]?.id?.startsWith?.('opt-user-')) {
+      lastOptUser = i
+      break
+    }
+  }
+  if (lastOptUser > 0) {
+    useUIStore.setState({ timelineItems: items.slice(lastOptUser) })
+  }
   store.clearFileChanges()
   if (sessionFile) {
     store.setHistoryMeta(0, 0, sessionFile)

@@ -28,6 +28,10 @@ export async function activateWorkspace(path: string, options?: ActivateWorkspac
     void fetchWorkerLiveSnapshot(leavingWorkspace).catch(() => {})
   }
   const store = useUIStore.getState()
+  // The pending queue is session-scoped: entering a new view must not keep the
+  // previous conversation's queued messages. Real session opens restore their own
+  // queue from the shell cache on bind; home / new-chat has nothing to restore.
+  store.clearPendingQueue()
   if (store.ephemeralSandboxDraft) store.clearEphemeralSandboxDraft()
   store.setSubagentSessionGroup(null)
 
