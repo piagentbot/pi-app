@@ -269,6 +269,25 @@ export function registerSessionHandlers(): void {
     if (!workerManager.isRunning || workerManager.cwd !== workspaceId) {
       await workerManager.start(workspaceId)
     }
+    // If the foreground worker is still mid-turn on the previous conversation
+    // (user clicked "new chat" while it streams), wait for it to settle before
+    // creating the new session. Otherwise the worker replies SESSION_BUSY and
+    // the new chat's first message is dropped (or, without the pending-new
+    // routing, steered into the old session).
+    if (!(await workerManager.waitUntilIdle())) {
+      return {
+        session: {
+          sessionId: '',
+          sessionFile: undefined,
+          workspaceId,
+          title: '新会话',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          modelId: '',
+          status: 'busy' as const,
+        },
+      }
+    }
     setPendingWorkerSessionFile(null)
     const result = await workerManager.newSession()
     const state = await workerManager.getState().catch(() => ({}))

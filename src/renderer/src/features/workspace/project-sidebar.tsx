@@ -679,16 +679,22 @@ export function ProjectSidebar({
     try {
       if (workspacePath !== currentWorkspace) {
         await activateWorkspace(workspacePath, { preferHome: true })
-      } else {
-        const store = useUIStore.getState()
-        store.clearPendingNewSessionPlaceholder()
-        store.setCurrentSession(null)
-        store.clearTimeline()
-        store.clearFileChanges()
-        store.setHistoryMeta(0, 0, null)
-        store.setSubagentSessionGroup(null)
-        void import('@renderer/lib/composer-run-display').then((m) => m.refreshComposerRunDisplay())
       }
+      const store = useUIStore.getState()
+      store.clearPendingQueue()
+      store.setCurrentSession(null)
+      store.clearTimeline()
+      store.clearFileChanges()
+      store.setHistoryMeta(0, 0, null)
+      store.setHistoryLoading(false)
+      store.setSubagentSessionGroup(null)
+      // Home view requires currentSessionId to be falsy, so keep the pending-new
+      // FLAG separate from the placeholder id. The flag guarantees the first send
+      // materializes a fresh session even when the previously-viewed session's
+      // worker events repopulate the timeline (they route as visible while no
+      // session file is bound).
+      useUIStore.setState({ pendingNewSessionPlaceholder: true })
+      void import('@renderer/lib/composer-run-display').then((m) => m.refreshComposerRunDisplay())
       setExpandedPaths((prev) => new Set(prev).add(workspacePath))
     } catch (e) {
       console.error('New session (home) failed:', e)

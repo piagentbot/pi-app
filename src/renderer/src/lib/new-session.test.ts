@@ -1,8 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useUIStore } from '@renderer/stores/ui-store'
 
 const invoke = vi.fn()
-const store = {
+const store: {
+  runState: { model?: string; thinkingLevel?: string }
+  timelineItems: Array<{ id: string; type: string; text?: string }>
+  clearPendingNewSessionPlaceholder: ReturnType<typeof vi.fn>
+  setCurrentSession: ReturnType<typeof vi.fn>
+  clearFileChanges: ReturnType<typeof vi.fn>
+  setHistoryMeta: ReturnType<typeof vi.fn>
+  setSessions: ReturnType<typeof vi.fn>
+} = {
   runState: { model: 'openai/org/model/v2', thinkingLevel: 'high' },
+  timelineItems: [],
   clearPendingNewSessionPlaceholder: vi.fn(),
   setCurrentSession: vi.fn(),
   clearFileChanges: vi.fn(),
@@ -32,6 +42,12 @@ describe('new session model preselection', () => {
     store.clearFileChanges.mockReset()
     store.setHistoryMeta.mockReset()
     store.setSessions.mockReset()
+    store.runState = { model: 'openai/org/model/v2', thinkingLevel: 'high' }
+    store.timelineItems = []
+    ;(useUIStore as unknown as { setState: ReturnType<typeof vi.fn> }).setState = vi.fn((p: unknown) => {
+      const patch = p as Partial<typeof store>
+      if (patch.timelineItems) store.timelineItems = patch.timelineItems
+    })
   })
 
   it('waits for model confirmation before finishing session materialization', async () => {
@@ -71,6 +87,46 @@ describe('new session model preselection', () => {
       sessionFile: 'C:/sessions/new.jsonl',
       level: 'high',
     })
+  })
+
+  it('sends the first prompt to the session file returned by session.new', async () => {
+    store.runState = {}
+    invoke.mockImplementation(async (method: string) => {
+      if (method === 'session.new') {
+        return { session: { sessionId: 'new-id', sessionFile: 'C:/sessions/new.jsonl' } }
+      }
+      if (method === 'session.setPendingBind') return { ok: true }
+      if (method === 'session.list') return { sessions: [] }
+      return {}
+    })
+
+    await materializePendingNewSession('D:/workspace', 'first prompt')
+
+    expect(store.setCurrentSession).toHaveBeenCalledWith('new-id')
+    expect(store.setHistoryMeta).toHaveBeenCalledWith(0, 0, 'C:/sessions/new.jsonl')
+    expect(invoke).toHaveBeenCalledWith('session.setPendingBind', { sessionFile: null })
+  })
+
+  it('drops stale previous-session items but keeps the trailing optimistic bubble', async () => {
+    store.runState = {}
+    store.timelineItems = [
+      { id: 'stale-user', type: 'user-message', text: 'old conversation content' },
+      { id: 'stale-asst', type: 'assistant-message', text: 'old reply' },
+      { id: 'opt-user-1', type: 'user-message', text: 'first prompt' },
+      { id: 'opt-asst-1', type: 'assistant-message', text: '' },
+    ]
+    invoke.mockImplementation(async (method: string) => {
+      if (method === 'session.new') {
+        return { session: { sessionId: 'new-id', sessionFile: 'C:/sessions/new.jsonl' } }
+      }
+      if (method === 'session.setPendingBind') return { ok: true }
+      if (method === 'session.list') return { sessions: [] }
+      return {}
+    })
+
+    await materializePendingNewSession('D:/workspace', 'first prompt')
+
+    expect(store.timelineItems.map((i) => i.id)).toEqual(['opt-user-1', 'opt-asst-1'])
   })
 
   it('rejects materialization when the Worker rejects the preselected model', async () => {

@@ -461,6 +461,21 @@ export class WorkerManager {
   }
 
   /**
+   * Wait for the foreground worker's agent turn to settle (bounded).
+   * Used by session.new so a new-chat first message isn't dropped with
+   * SESSION_BUSY while the previous conversation is still streaming.
+   */
+  async waitUntilIdle(timeoutMs = 60_000, pollMs = 250): Promise<boolean> {
+    const start = Date.now()
+    for (;;) {
+      const state = await this.getState().catch(() => null)
+      if (!state || !(state as { isStreaming?: boolean }).isStreaming) return true
+      if (Date.now() - start >= timeoutMs) return false
+      await new Promise((resolve) => setTimeout(resolve, pollMs))
+    }
+  }
+
+  /**
    * After Runtime creates a new session file (new/fork/clone), re-key the
    * foreground pool slot so subsequent RPCs hit the correct worker identity.
    */
@@ -585,9 +600,22 @@ export class WorkerManager {
     const r = await this.request('getCommands')
     return { commands: (r.commands as WorkerCommandInfo[]) || [], hasSession: !!r.hasSession }
   }
-  async getSessionContextPreview(): Promise<WorkerContextPreview> {
-    const r = await this.request('getSessionContextPreview')
-    return (r.preview as WorkerContextPreview) || null
+  /**
+   * Context preview for the VIEWED session only.
+   * With a sessionFile: query that session's worker slot if it exists (never spawn
+   * a worker just to preview). Without one (home / new-chat): there is nothing to
+   * preview — returning the foreground worker's context would leak the previous
+   * conversation's content into the new-chat screen.
+   */
+  async getSessionContextPreview(sessionFile?: string): Promise<WorkerContextPreview> {
+    if (sessionFile) {
+      const sk = normalizeSessionKey(sessionFile)
+      const slot = this.pool.get(sk)
+      if (!slot || slot.stopping) return null
+      const r = await this.requestOnSlot(slot, 'getSessionContextPreview')
+      return (r.preview as WorkerContextPreview) || null
+    }
+    return null
   }
   async getSkillsList(): Promise<WorkerSkillInfo[]> {
     const r = await this.request('getSkillsList')
