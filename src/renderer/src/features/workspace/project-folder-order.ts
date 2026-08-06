@@ -19,3 +19,25 @@ export function projectFolderOrder(
   }
   return out
 }
+
+export type DropPosition = 'above' | 'below'
+
+/**
+ * 拖拽排序：把 fromPath 移动到 targetPath 的上方/下方，返回新列表。
+ * 任一路径不在列表中原样返回（调用方据此跳过写盘）。
+ */
+export function applyProjectReorder(
+  list: string[],
+  fromPath: string,
+  targetPath: string,
+  position: DropPosition,
+): string[] {
+  const fromIdx = list.indexOf(fromPath)
+  const targetIdx = list.indexOf(targetPath)
+  if (fromIdx < 0 || targetIdx < 0) return list
+  const out = list.filter((p) => p !== fromPath)
+  let insertIdx = out.indexOf(targetPath)
+  if (position === 'below') insertIdx += 1
+  out.splice(insertIdx, 0, fromPath)
+  return out
+}

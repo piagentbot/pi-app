@@ -44,6 +44,7 @@ export const IPC_INVOKE_CHANNELS = [
   'ipc:pi.settings.get',
   'ipc:pi.settings.set',
   'ipc:project.removeRecent',
+  'ipc:project.reorderRecent',
   'ipc:prompt.abort',
   'ipc:prompt.dequeueClearQueue',
   'ipc:prompt.followUp',

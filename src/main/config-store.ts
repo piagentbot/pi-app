@@ -4,12 +4,14 @@ import type { CustomCssOverride, CustomTheme } from '@shared/custom-theme'
 import { DEFAULT_ICON_THEME, type IconTheme } from '@shared/icon-theme'
 import { DEFAULT_TIMELINE_MAX_AUTO_EXPANDED_TOOLS } from '@shared/timeline-settings'
 import { bindSecretStoreBacking } from './secret-store'
-import { nextRecentProjects } from './recent-projects'
+import { nextRecentProjects, shouldMigrateFixedOrder } from './recent-projects'
 
 export interface StoreSchema {
   recentProjects: string[]
-  /** 侧栏项目列表固定顺序（不随打开而置顶）；false = 最近使用排序（默认） */
+  /** 侧栏项目列表固定顺序（不随打开而置顶，默认开启）；false = 最近使用排序 */
   recentProjectsFixedOrder: boolean
+  /** 一次性的顺序模式迁移标记：旧版本默认 MRU，现改为固定顺序 */
+  recentProjectsOrderMigrated: boolean
   currentProject: string | null
   windowBounds: { width: number; height: number; x?: number; y?: number } | null
   theme: 'light' | 'dark' | 'system'
@@ -67,7 +69,8 @@ const store = new Store<StoreSchema>({
   name: 'pi-desktop',
   defaults: {
     recentProjects: [],
-    recentProjectsFixedOrder: false,
+    recentProjectsFixedOrder: true,
+    recentProjectsOrderMigrated: false,
     currentProject: null,
     windowBounds: null,
     theme: 'system',
@@ -111,6 +114,14 @@ const store = new Store<StoreSchema>({
     } as AsrConfig,
   },
 })
+
+// 迁移：旧版本默认 MRU（打开项目会把当前项目移到列表最前），切对话会打乱用户顺序。
+// 新默认固定顺序（切换对话/打开项目都不改动已有顺序，新项目追加到末尾）。
+// 对旧配置中显式写下的 false 只做一次性迁移，之后用户仍可在设置里自由切换。
+if (shouldMigrateFixedOrder(store.get('recentProjectsFixedOrder'), store.get('recentProjectsOrderMigrated'))) {
+  store.set('recentProjectsFixedOrder', true)
+  store.set('recentProjectsOrderMigrated', true)
+}
 
 bindSecretStoreBacking({
   get: (k) => store.get(k as keyof StoreSchema),

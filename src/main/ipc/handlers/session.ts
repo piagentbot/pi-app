@@ -8,6 +8,7 @@ import { clearSessionDisplayName, resolveSessionListTitle } from '../../session-
 import { archiveSession, archiveSessionsByRule, clearSessionArchive, getArchivedAt, restoreSession, restoreSessions, restoreSessionsByRule } from '../../session-archive'
 import { autoNameTitle } from '../../session-auto-name'
 import { renamePiSessionOnDisk } from '../../rename-pi-session'
+import { RECENT_PROJECTS_CAP } from '../../recent-projects'
 import {
   bindSandboxSession,
   isSandboxWorkspacePath,
@@ -609,6 +610,21 @@ export function registerSessionHandlers(): void {
       configStore.set('currentProject', next)
     }
     return { ok: true, currentProject: configStore.get('currentProject') }
+  })
+
+  registerHandler('ipc:project.reorderRecent', async (req) => {
+    // 手动拖拽排序 = 用户自定义顺序：直接写入存储并切到固定顺序模式，
+    // 这样后续打开项目/切换对话时不会被 MRU 顶置打乱（nextRecentProjects 固定模式不改动已有顺序）。
+    const raw = Array.isArray(req?.paths) ? req.paths : []
+    const paths: string[] = []
+    for (const p of raw) {
+      const s = String(p ?? '').trim()
+      if (s && !paths.includes(s)) paths.push(s)
+    }
+    if (paths.length === 0) return { ok: false, error: 'missing paths' }
+    configStore.set('recentProjects', paths.slice(0, RECENT_PROJECTS_CAP))
+    configStore.set('recentProjectsFixedOrder', true)
+    return { ok: true, recentProjects: configStore.get('recentProjects'), fixedOrder: true }
   })
 
   registerHandler('ipc:session.compact', async () => {
