@@ -91,15 +91,31 @@ function historyTurnMatchesUnanchoredLiveTail(
   )
 }
 
+function liveTailIsActiveTurn(opts?: { liveActive?: boolean }): boolean {
+  return opts?.liveActive === true
+}
+
+/** Worker turnId 形如 `turn-<seq>`；非数字序列返回 null（无法比较）。 */
+function turnNumber(turnId: string | undefined | null): number | null {
+  const match = /^turn-(\d+)$/.exec(String(turnId ?? ''))
+  return match ? Number.parseInt(match[1], 10) : null
+}
+
 /**
  * JSONL tail + 内存 live cache。
  * 切出时 capture 常是「整段可见时间线」；后台只继续追加流式尾部。
  * 禁止无脑 hist+live 拼接（重复渲染）；禁止在 live 含 tool 时只保留 assistant（少渲染）。
+ *
+ * liveActive：live 是当前会话仍在进行的活动 turn（streaming / 乐观 pending / running）。
+ * 此时磁盘快照必然滞后于 live（当前 turn 尚未落盘），磁盘尾部与 live 无共同锚点
+ * 不是分支冲突，而是「磁盘是过去、live 是现在」——必须把 live 续集接在磁盘之后，
+ * 否则打开正在工作的会话时当前对话会被吞掉。
  */
 export function mergeLiveTimelineWithHistoryTail(
   historyItems: TimelineItem[],
   liveItems: TimelineItem[],
   persistedEntryOverlap: string[] = [],
+  opts?: { liveActive?: boolean },
 ): TimelineItem[] {
   const hist = sanitizeLiveMergeTimeline(historyItems)
   const live = sanitizeLiveMergeTimeline(liveItems)
@@ -225,6 +241,20 @@ export function mergeLiveTimelineWithHistoryTail(
     ) {
       return dedupeAdjacentUserMessages([...histThroughUser, ...live])
     }
+    // 磁盘滞后 + 渲染层重载：live 只剩 assistant-only 流式尾（用户消息事件已错过）。
+    // 该尾与磁盘最后一个用户之后的内容不是同一轮，且严格不早于磁盘末尾时，
+    // 作为续集接上，避免答案凭空消失；陈旧尾（旧轮次回流）必须拒绝。
+    if (
+      liveTailIsActiveTurn(opts) &&
+      liveAsst?.type === 'assistant-message' &&
+      !sameTurn
+    ) {
+      const liveTurn = turnNumber(liveAsst.turnId)
+      const histLastTurn = turnNumber(hist[hist.length - 1]?.turnId)
+      if (liveTurn != null && (histLastTurn == null || liveTurn >= histLastTurn)) {
+        return dedupeAdjacentUserMessages([...hist, ...live])
+      }
+    }
     return dedupeAdjacentUserMessages(hist)
   }
 
@@ -253,6 +283,20 @@ export function mergeLiveTimelineWithHistoryTail(
     countByType(live, 'user-message') >= countByType(hist, 'user-message')
   ) {
     return dedupeAdjacentUserMessages(live)
+  }
+
+  // 磁盘滞后（打开正在工作的会话）：live 是当前 turn 的活动流式尾，其首条用户消息
+  // 在磁盘尾部找不到任何锚点（当前 turn 尚未落盘）→ live 是磁盘的续集，拼接保留，
+  // 而不是回到「磁盘权威」把正在进行的对话吞掉。
+  if (liveTailIsActiveTurn(opts) && liveUserIdx >= 0 && histUserIdx >= 0) {
+    const liveFirstUserIdx = live.findIndex((item) => item.type === 'user-message')
+    if (liveFirstUserIdx >= 0) {
+      const liveFirstUser = live[liveFirstUserIdx]
+      const overlapsDisk = hist.some((h) => usersMatch(h, liveFirstUser))
+      if (!overlapsDisk) {
+        return dedupeAdjacentUserMessages([...hist, ...live])
+      }
+    }
   }
 
   // 最后手段：不要 hist+live 全量拼接；磁盘权威
