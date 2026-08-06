@@ -79,7 +79,18 @@ export function useFilePreviewTabs() {
   }, [])
 
   const renameTabRel = useCallback((oldRel: string, newRel: string, newName: string) => {
-    setTabs((prev) => prev.map((t) => (t.rel === oldRel ? { ...t, rel: newRel, name: newName } : t)))
+    setTabs((prev) =>
+      prev.map((t) => {
+        if (t.rel === oldRel) return { ...t, rel: newRel, name: newName }
+        // Folder rename: rewrite open tabs whose file lives under the renamed directory
+        // so their previews follow the file instead of going stale (the old path no
+        // longer exists and there is no idle re-read to recover it).
+        if (oldRel && t.rel.startsWith(`${oldRel}/`)) {
+          return { ...t, rel: `${newRel}/${t.rel.slice(oldRel.length + 1)}` }
+        }
+        return t
+      }),
+    )
   }, [])
 
   const resetTabs = useCallback(() => {
