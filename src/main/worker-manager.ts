@@ -1,7 +1,7 @@
 // Worker Manager - multi-session utility process pool (sessionKey + workspace keys)
 
 import { type BrowserWindow } from 'electron'
-import type { AppEvent } from '@shared/app-events'
+import type { AppEvent, RunEvent } from '@shared/app-events'
 import type {
   WorkerCommandInfo,
   WorkerCompletionItem,
@@ -37,6 +37,7 @@ import {
   getSessionLeafOverride,
   setSessionLeafOverride,
 } from './session-leaf-override'
+import { deliverDesktopAlert } from './desktop-alerts'
 
 interface InitResult extends WorkerInitResult {}
 
@@ -166,6 +167,7 @@ export class WorkerManager {
       mainWindow: this.mainWindow,
       getForegroundPoolKey: () => this.foregroundPoolKey,
       onAppEvent: (p) => this.forwardAppEvent(p),
+      onRunIdleSettled: (p) => this.deliverRunIdleAlert(p),
       onSlotExit: (s, code) => this.handleSlotExit(s, code),
     })
 
@@ -226,6 +228,7 @@ export class WorkerManager {
       mainWindow: this.mainWindow,
       getForegroundPoolKey: () => this.foregroundPoolKey,
       onAppEvent: (p) => this.forwardAppEvent(p),
+      onRunIdleSettled: (p) => this.deliverRunIdleAlert(p),
       onSlotExit: (s, code) => this.handleSlotExit(s, code),
     })
 
@@ -254,6 +257,42 @@ export class WorkerManager {
       model: (live?.state as WorkerState)?.model as string | undefined,
       thinkingLevel: (live?.state as WorkerState)?.thinkingLevel as string | undefined,
     }
+  }
+
+  /**
+   * Agent 停下 (settled) 时由主进程直接发系统通知 — 不经 renderer,
+   * 不受前台/队列抑制影响; 通知携带会话路由, 点击后跳转对应对话。
+   */
+  private deliverRunIdleAlert(p: {
+    event: AppEvent
+    fromCwd: string
+    fromPoolKey: string
+    sessionFile: string | null
+    runDurationMs: number
+  }): void {
+    const win = this.mainWindow
+    if (!win || win.isDestroyed()) return
+    const ev = p.event as RunEvent
+    const background = this.foregroundPoolKey !== null && p.fromPoolKey !== this.foregroundPoolKey
+    const sec = Math.max(1, Math.round(p.runDurationMs / 1000))
+    const failed = ev.phase === 'failed'
+    deliverDesktopAlert(win, {
+      kind: 'run_idle',
+      title: failed
+        ? 'pi Desktop · 运行结束（失败）'
+        : background
+          ? 'pi Desktop · 后台会话结束'
+          : 'pi Desktop · 运行结束',
+      body: failed
+        ? 'Agent 运行失败已停止，点击查看'
+        : background
+          ? `有会话在后台运行结束（约 ${sec} 秒），点击查看`
+          : `Agent 已空闲（约 ${sec} 秒），点击查看`,
+      background,
+      workspaceId: ev.workspaceId || p.fromCwd,
+      sessionId: ev.sessionId,
+      sessionFile: p.sessionFile ?? ev.sessionFile,
+    })
   }
 
   private forwardAppEvent(payload: {

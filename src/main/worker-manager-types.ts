@@ -26,6 +26,8 @@ export type WorkerSlot = {
   agentTurnActive: boolean
   /** Last time turn became idle (ms); used for idle TTL eviction */
   lastIdleAt: number
+  /** Last agent run start (ms); used for run-idle alert duration filter */
+  lastRunStartedAt: number | null
   /** Last time this slot was foreground (ms) */
   lastForegroundAt: number
   sdkFallback: boolean

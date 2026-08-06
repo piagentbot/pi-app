@@ -1,4 +1,4 @@
-import type { AppEvent } from '@shared/app-events'
+import type { AppEvent, AlertOpenEvent } from '@shared/app-events'
 import { isSessionScopedAppEvent } from '@shared/app-event-session'
 import { resolveAppEventRoute } from '@renderer/stores/apply-app-event-route'
 import { useUIStore } from '@renderer/stores/ui-store'
@@ -17,8 +17,22 @@ import type { StoreApi } from '@renderer/stores/apply-app-event-types'
 
 export type { StoreApi } from '@renderer/stores/apply-app-event-types'
 
+/** 系统通知点击 → 切到通知对应的会话 (复用会话切换链路, 磁盘直读, 不依赖 Worker) */
+function handleAlertOpen(event: AlertOpenEvent): void {
+  const { workspaceId, sessionId, sessionFile } = event
+  if (!workspaceId || !sessionFile) return
+  void import('@renderer/lib/activate-workspace').then((m) =>
+    m.activateWorkspace(workspaceId, { sessionId, sessionFile }),
+  )
+}
+
 export function applyAppEvent(event: AppEvent, api: StoreApi): void {
   if (!isSessionScopedAppEvent(event)) return
+  // 主进程系统通知点击 → 跳转到对应工作区/会话 (命令事件, 不走会话路由过滤)
+  if (event.type === 'alert_open') {
+    handleAlertOpen(event)
+    return
+  }
   const state = api.get()
   if (event.type === 'tool' && state.subagentSessionGroup) {
     const nextGroup = reduceSubagentSessionGroupToolEvent(state.subagentSessionGroup, event)

@@ -97,6 +97,14 @@ export interface AgentErrorEvent extends AppEventBase {
   stopReason?: string
 }
 
+// 主进程系统通知点击 → 让 UI 跳转到对应工作区/会话 (Main → Renderer)
+export interface AlertOpenEvent extends AppEventBase {
+  type: 'alert_open'
+  /** 目标会话 JSONL 路径 */
+  sessionFile?: string
+  sessionId?: string
+}
+
 // SDK 安装进度（设置页 UI 用，与会话无关，不继承 AppEventBase）
 export interface SdkInstallProgressEvent {
   type: 'sdk-install-progress'
@@ -115,6 +123,7 @@ export type AppEvent =
   | SlashEvent
   | QueueEvent
   | AgentErrorEvent
+  | AlertOpenEvent
   | SdkInstallProgressEvent
 
 export const APP_EVENT_CHANNEL = 'app:event'

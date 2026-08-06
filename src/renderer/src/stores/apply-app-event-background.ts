@@ -45,13 +45,4 @@ export function applyBackgroundAppEvent(event: AppEvent): void {
   if (event.type !== 'run') return
   const running = event.phase === 'running' || event.phase === 'started'
   useUIStore.getState().setSessionRuntimeRunning(cacheFile, running)
-  if (!running && (event.phase === 'idle' || event.phase === 'failed' || event.phase === 'cancelled')) {
-    void import('@renderer/lib/desktop-alerts').then(({ signalDesktopAlert }) => {
-      void signalDesktopAlert('run_idle', {
-        title: 'pi Desktop · 后台会话结束',
-        body: '有会话在后台运行结束',
-        background: true,
-      })
-    })
-  }
 }

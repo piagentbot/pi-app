@@ -39,6 +39,7 @@ function fakeSlot(poolKey: string, cwd: string, active: boolean, lastFg = Date.n
     initPromise: null,
     agentTurnActive: active,
     lastIdleAt: Date.now(),
+    lastRunStartedAt: null,
     lastForegroundAt: lastFg,
     sdkFallback: false,
     autoRestartEnabled: true,
