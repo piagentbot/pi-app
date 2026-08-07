@@ -67,6 +67,9 @@
     "batchRestored": "Restored {{count}} sessions",
     "batchRestoreNone": "No sessions to restore",
     "batchRestoreFailed": "Batch restore failed",
+    "dragToReorder": "Drag to reorder",
+    "dragToReorderDesc": "Drag project folders to reorder. The order is saved and kept when switching conversations",
+    "reorderFailed": "Failed to save the order, please retry",
     "deleteSessionTitle": "Delete session",
     "deleteSandboxTitle": "Delete temp chat",
     "removeProjectTitle": "Remove project from list"

@@ -46,6 +46,8 @@ export const useUIStore = create<UIState>()(
       historySessionFile: null,
       historyLoading: false,
       subagentSessionGroup: null,
+      pendingSteering: [],
+      pendingFollowUp: [],
     })
     void import('@renderer/lib/ipc-client').then(({ ipcClient }) =>
       ipcClient.invoke('session.setEphemeralDraft', { active: true }).catch(() => {}),
@@ -61,6 +63,8 @@ export const useUIStore = create<UIState>()(
       ephemeralSandboxDraft: false,
       currentSessionId: '__pending_new__',
       subagentSessionGroup: null,
+      pendingSteering: [],
+      pendingFollowUp: [],
       ...(keep
         ? {}
         : {

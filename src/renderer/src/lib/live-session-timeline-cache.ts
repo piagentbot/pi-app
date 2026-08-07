@@ -534,3 +534,14 @@ export function isLiveSessionRunning(sessionFile: string | undefined | null): bo
   const snap = liveTimelines.get(cacheKey(sessionFile))
   return snap?.runState.status === 'running'
 }
+
+/** live 快照是否代表「仍在进行的活动 turn」（用于磁盘滞后时保护流式尾部）。 */
+export function liveSnapshotActive(snap: LiveSessionTimelineSnapshot | null): boolean {
+  if (!snap) return false
+  return (
+    snap.runState.status === 'running' ||
+    snap.streamingAssistantId != null ||
+    snap.optimisticPendingUserText != null ||
+    snap.agentTurnBootstrapping
+  )
+}

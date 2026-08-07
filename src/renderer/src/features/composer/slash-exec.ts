@@ -134,9 +134,15 @@ export async function executeSlashCommand(
           toast.error(i18n.t('composer:toast.needWorkspace'))
           return true
         }
+        store.clearPendingQueue()
         store.clearTimeline()
         store.setCurrentSession(null)
         store.setHistoryMeta(0, 0, null)
+        // Same contract as the sidebar「新会话」: keep the pending-new flag so the
+        // first send always materializes a fresh session (stale worker events can
+        // repopulate the home timeline and would otherwise defeat the homeMode
+        // check in the composer).
+        useUIStore.setState({ pendingNewSessionPlaceholder: true })
         void ipcClient.invoke('session.setPendingBind', { sessionFile: null }).catch(() => {})
         void import('@renderer/lib/composer-run-display').then((m) => m.refreshComposerRunDisplay())
         toast.info(i18n.t('composer:toast.newSessionReady'))

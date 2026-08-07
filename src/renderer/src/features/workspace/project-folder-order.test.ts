@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { projectFolderOrder } from './project-folder-order'
+import { applyProjectReorder, projectFolderOrder } from './project-folder-order'
 
 describe('projectFolderOrder', () => {
   it('MRU mode (default): pins the current workspace to the top, then stored order', () => {
@@ -19,5 +19,22 @@ describe('projectFolderOrder', () => {
     expect(projectFolderOrder(['a', 'a', 'b'], 'a', false)).toEqual(['a', 'b'])
     expect(projectFolderOrder(['a', 'b'], null, false)).toEqual(['a', 'b'])
     expect(projectFolderOrder(['', 'a'], null, true)).toEqual(['a'])
+  })
+})
+
+describe('applyProjectReorder', () => {
+  it('moves the dragged path above the target', () => {
+    expect(applyProjectReorder(['a', 'b', 'c', 'd'], 'd', 'b', 'above')).toEqual(['a', 'd', 'b', 'c'])
+    expect(applyProjectReorder(['a', 'b', 'c'], 'a', 'c', 'above')).toEqual(['b', 'a', 'c'])
+  })
+
+  it('moves the dragged path below the target', () => {
+    expect(applyProjectReorder(['a', 'b', 'c', 'd'], 'a', 'c', 'below')).toEqual(['b', 'c', 'a', 'd'])
+    expect(applyProjectReorder(['a', 'b', 'c'], 'c', 'a', 'below')).toEqual(['a', 'c', 'b'])
+  })
+
+  it('keeps the list unchanged when either path is missing', () => {
+    expect(applyProjectReorder(['a', 'b'], 'x', 'a', 'below')).toEqual(['a', 'b'])
+    expect(applyProjectReorder(['a', 'b'], 'a', 'x', 'above')).toEqual(['a', 'b'])
   })
 })

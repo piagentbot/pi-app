@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Archive, ChevronRight, Folder, GitBranch, Inbox, Plus, RotateCcw, Trash2 } from '@renderer/components/icons'
+import { Archive, ChevronRight, Folder, GitBranch, GripVertical, Inbox, Plus, RotateCcw, Trash2 } from '@renderer/components/icons'
 import { cn } from '@renderer/lib/utils'
 import { activateWorkspace, switchSessionInPlace } from '@renderer/lib/activate-workspace'
 import { guardSessionSwitch } from '@renderer/lib/session-switch-guard'
@@ -251,6 +251,13 @@ export function ProjectDiskRow({
   name,
   active,
   open,
+  draggable,
+  dragging,
+  dropIndicator,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
   onToggleOpen,
   onNewSession,
   onProjectContextMenu,
@@ -260,6 +267,16 @@ export function ProjectDiskRow({
   name: string
   active: boolean
   open: boolean
+  /** 项目数 >1 时允许拖拽排序 */
+  draggable: boolean
+  /** 当前行正被拖拽（用于半透明反馈） */
+  dragging: boolean
+  /** 当前行的落点位置（上方/下方插入指示） */
+  dropIndicator: 'above' | 'below' | null
+  onDragStart: (e: React.DragEvent) => void
+  onDragOver: (e: React.DragEvent) => void
+  onDrop: (e: React.DragEvent) => void
+  onDragEnd: () => void
   onToggleOpen: () => void
   onNewSession: () => void
   onProjectContextMenu: (e: React.MouseEvent) => void
@@ -267,13 +284,37 @@ export function ProjectDiskRow({
 }) {
   const { t } = useTranslation()
   return (
-    <div key={path} className="sidebar-project-row mb-0.5" onContextMenu={onProjectContextMenu}>
+    <div
+      key={path}
+      className={cn(
+        'sidebar-project-row group/sidebar-project-row relative mb-0.5',
+        dragging && 'opacity-50',
+      )}
+      onContextMenu={onProjectContextMenu}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+    >
+      {dropIndicator === 'above' && (
+        <div className="pointer-events-none absolute inset-x-1 -top-[3px] z-10 h-[3px] rounded-full bg-brand" />
+      )}
+      {dropIndicator === 'below' && (
+        <div className="pointer-events-none absolute inset-x-1 -bottom-[3px] z-10 h-[3px] rounded-full bg-brand" />
+      )}
       <div
         className={cn(
           'nav-row flex min-h-[36px] items-center gap-0.5 rounded-lg px-0.5',
           (active || open) && 'bg-[var(--bg-hover)]/80',
         )}
       >
+        <span
+          title={t('common:sidebar.dragToReorder')}
+          className="flex h-6 w-5 shrink-0 cursor-grab items-center justify-center text-foreground-secondary/40 opacity-0 transition-opacity group-hover/sidebar-project-row:opacity-100 hover:text-foreground active:cursor-grabbing"
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </span>
         <button
           type="button"
           onClick={onToggleOpen}

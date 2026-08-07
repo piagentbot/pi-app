@@ -28,7 +28,7 @@ import {
   type SessionItem,
 } from './project-sidebar-types'
 import { sessionFilesEqual } from '@renderer/lib/session-file-key'
-import { projectFolderOrder } from './project-folder-order'
+import { projectFolderOrder, applyProjectReorder, type DropPosition } from './project-folder-order'
 import {
   ArchivedSessionEntry,
   ProjectDiskRow,
@@ -58,6 +58,15 @@ export function ProjectSidebar({
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set())
   const [recentProjectsFixedOrder, setRecentProjectsFixedOrder] = useState(false)
   const fixedOrderRef = useRef(false)
+  // 拖拽排序状态：被拖的项目路径 + 当前落点指示（目标路径 + 上方/下方）
+  // 逻辑用 ref（不依赖 React 渲染时机，快拖/连续事件下也可靠），state 只用于视觉反馈
+  const dragPathRef = useRef<string | null>(null)
+  const dropIndicatorRef = useRef<{ path: string; position: DropPosition } | null>(null)
+  const [dragProjectPath, setDragProjectPath] = useState<string | null>(null)
+  const [projectDropIndicator, setProjectDropIndicator] = useState<{
+    path: string
+    position: DropPosition
+  } | null>(null)
   const [sectionOpen, setSectionOpen] = useState(true)
   const [archivedByWorkspace, setArchivedByWorkspace] = useState<
     Record<string, { open: boolean; loading: boolean; items: SessionItem[] }>
@@ -575,6 +584,70 @@ export function ProjectSidebar({
     }
   }
 
+  const clearProjectDrag = () => {
+    dragPathRef.current = null
+    dropIndicatorRef.current = null
+    setDragProjectPath(null)
+    setProjectDropIndicator(null)
+  }
+
+  const handleProjectDragStart = (e: React.DragEvent, path: string) => {
+    if (diskPaths.length < 2) return
+    dragPathRef.current = path
+    setDragProjectPath(path)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', path)
+  }
+
+  const handleProjectDragOver = (e: React.DragEvent, path: string) => {
+    if (!dragPathRef.current) return
+    if (dragPathRef.current === path) {
+      // 回到被拖行自身：不显示落点、清掉可能残留的指示，避免拖回原位却按旧落点重排
+      dropIndicatorRef.current = null
+      setProjectDropIndicator(null)
+      return
+    }
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    const rect = e.currentTarget.getBoundingClientRect()
+    if (rect.height <= 0) return
+    const position: DropPosition = e.clientY - rect.top < rect.height / 2 ? 'above' : 'below'
+    dropIndicatorRef.current = { path, position }
+    setProjectDropIndicator((prev) =>
+      prev && prev.path === path && prev.position === position ? prev : { path, position },
+    )
+  }
+
+  const handleProjectDrop = (e: React.DragEvent, path: string) => {
+    e.preventDefault()
+    const from = dragPathRef.current
+    const target = dropIndicatorRef.current
+    const before = diskPaths
+    clearProjectDrag()
+    if (!from || !target || from === path) return
+    const next = applyProjectReorder(before, from, target.path, target.position)
+    // 顺序没有变化时不做无谓写盘（含拖回原位）
+    if (next.length === before.length && next.every((p, i) => p === before[i])) return
+    // 乐观更新：松手立即看到新顺序；写盘失败再回滚并提示
+    useUIStore.setState({ recentProjects: next })
+    void ipcClient
+      .invoke('project.reorderRecent', { paths: next })
+      .then((r) => {
+        if (!r?.ok) throw new Error(String(r?.error || 'reorder failed'))
+        // 拖拽排序即自定义顺序：先同步固定顺序标志，再按新顺序重载侧栏，
+        // 避免 reloadSidebarSettings 把当前项目 unshift 到顶部破坏用户顺序。
+        fixedOrderRef.current = true
+        setRecentProjectsFixedOrder(true)
+        reloadSidebarSettings()
+      })
+      .catch((err) => {
+        console.error('[ProjectSidebar] reorderRecent failed:', err)
+        // 回滚到拖拽前的顺序，并提示用户排序未保存
+        useUIStore.setState({ recentProjects: before })
+        toast.error(t('common:sidebar.reorderFailed'))
+      })
+  }
+
   const handleNewSandboxDialog = () => {
     useUIStore.getState().enterEphemeralSandboxDraft()
     void import('@renderer/lib/composer-run-display').then((m) => m.refreshComposerRunDisplay())
@@ -606,16 +679,22 @@ export function ProjectSidebar({
     try {
       if (workspacePath !== currentWorkspace) {
         await activateWorkspace(workspacePath, { preferHome: true })
-      } else {
-        const store = useUIStore.getState()
-        store.clearPendingNewSessionPlaceholder()
-        store.setCurrentSession(null)
-        store.clearTimeline()
-        store.clearFileChanges()
-        store.setHistoryMeta(0, 0, null)
-        store.setSubagentSessionGroup(null)
-        void import('@renderer/lib/composer-run-display').then((m) => m.refreshComposerRunDisplay())
       }
+      const store = useUIStore.getState()
+      store.clearPendingQueue()
+      store.setCurrentSession(null)
+      store.clearTimeline()
+      store.clearFileChanges()
+      store.setHistoryMeta(0, 0, null)
+      store.setHistoryLoading(false)
+      store.setSubagentSessionGroup(null)
+      // Home view requires currentSessionId to be falsy, so keep the pending-new
+      // FLAG separate from the placeholder id. The flag guarantees the first send
+      // materializes a fresh session even when the previously-viewed session's
+      // worker events repopulate the timeline (they route as visible while no
+      // session file is bound).
+      useUIStore.setState({ pendingNewSessionPlaceholder: true })
+      void import('@renderer/lib/composer-run-display').then((m) => m.refreshComposerRunDisplay())
       setExpandedPaths((prev) => new Set(prev).add(workspacePath))
     } catch (e) {
       console.error('New session (home) failed:', e)
@@ -831,7 +910,18 @@ export function ProjectSidebar({
         onCancel={() => setConfirmState(null)}
       />
 
-      <div className="mt-2 px-1.5">
+      <div
+        className="mt-2 px-1.5"
+        onDragLeave={(e) => {
+          // 拖出整个项目区时清除落点指示；在行间移动时 relatedTarget 仍在容器内，不会误清
+          const related = e.relatedTarget as Node | null
+          if (!related || !e.currentTarget.contains(related)) {
+            dropIndicatorRef.current = null
+            setProjectDropIndicator(null)
+          }
+        }}
+        onDrop={(e) => e.preventDefault()}
+      >
         <div className="px-2 pb-1 text-[11px] font-medium tracking-wide text-foreground-secondary/75">
           {t('common:sidebar.projects')}
         </div>
@@ -849,6 +939,13 @@ export function ProjectSidebar({
                 name={diskProjectName(path)}
                 active={path === currentWorkspace}
                 open={open}
+                draggable={diskPaths.length > 1}
+                dragging={dragProjectPath === path}
+                dropIndicator={projectDropIndicator?.path === path ? projectDropIndicator.position : null}
+                onDragStart={(e) => handleProjectDragStart(e, path)}
+                onDragOver={(e) => handleProjectDragOver(e, path)}
+                onDrop={(e) => handleProjectDrop(e, path)}
+                onDragEnd={clearProjectDrag}
                 onToggleOpen={() => {
                   const willExpand = !expandedPaths.has(path)
                   setExpandedPaths((previous) => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RECENT_PROJECTS_CAP, nextRecentProjects } from './recent-projects'
+import { nextRecentProjects, RECENT_PROJECTS_CAP, shouldMigrateFixedOrder } from './recent-projects'
 
 describe('nextRecentProjects', () => {
   describe('MRU mode (default, fixedOrder=false)', () => {
@@ -37,5 +37,21 @@ describe('nextRecentProjects', () => {
       expect(next[next.length - 1]).toBe('new')
       expect(next).not.toContain('p0')
     })
+  })
+})
+
+describe('shouldMigrateFixedOrder', () => {
+  it('migrates explicit MRU configs that have never been migrated', () => {
+    expect(shouldMigrateFixedOrder(false, false)).toBe(true)
+  })
+
+  it('does not migrate already-fixed or already-migrated configs', () => {
+    expect(shouldMigrateFixedOrder(true, false)).toBe(false)
+    expect(shouldMigrateFixedOrder(false, true)).toBe(false)
+    expect(shouldMigrateFixedOrder(true, true)).toBe(false)
+  })
+
+  it('does not migrate configs where the key was never written (new default is fixed)', () => {
+    expect(shouldMigrateFixedOrder(undefined, undefined)).toBe(false)
   })
 })

@@ -16,6 +16,7 @@ export function useComposerMetrics(options?: { enabled?: boolean }) {
   const metricsEnabled = options?.enabled !== false
   const workspace = useUIStore((s) => s.currentWorkspace)
   const currentSessionId = useUIStore((s) => s.currentSessionId)
+  const historySessionFile = useUIStore((s) => s.historySessionFile)
   const model = useUIStore((s) => s.runState.model)
   const usage = useUIStore((s) => s.runState.usage)
   const isRunning = useUIStore((s) => s.runState.status === 'running')
@@ -34,7 +35,9 @@ export function useComposerMetrics(options?: { enabled?: boolean }) {
   const streamRef = useRef({ id: null as string | null, start: 0, lastLen: 0, lastAt: 0 })
 
   useEffect(() => {
-    if (!metricsEnabled || !workspace) {
+    // Home / new-chat (no viewed session): never show the foreground worker's
+    // context — it may still be bound to the previously-viewed conversation.
+    if (!metricsEnabled || !workspace || !historySessionFile) {
       setContextPreview(null)
       return
     }
@@ -43,7 +46,7 @@ export function useComposerMetrics(options?: { enabled?: boolean }) {
       if (historyLoading) return
       if (typeof document !== 'undefined' && document.hidden) return
       ipcClient
-        .invoke('context.preview')
+        .invoke('context.preview', { sessionFile: useUIStore.getState().historySessionFile })
         .then((r) => {
           if (!cancelled && r?.preview) {
             const rawBreakdown = Array.isArray(r.preview.roleBreakdown)
@@ -75,7 +78,7 @@ export function useComposerMetrics(options?: { enabled?: boolean }) {
       window.clearInterval(intervalId)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [metricsEnabled, workspace, currentSessionId, historyLoading, isRunning])
+  }, [metricsEnabled, workspace, currentSessionId, historySessionFile, historyLoading, isRunning])
 
   useEffect(() => {
     if (!metricsEnabled || !workspace || !model) {

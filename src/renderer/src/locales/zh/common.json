@@ -67,6 +67,9 @@
     "batchRestored": "已恢复 {{count}} 个会话",
     "batchRestoreNone": "没有可恢复的会话",
     "batchRestoreFailed": "批量恢复失败",
+    "dragToReorder": "拖动排序",
+    "dragToReorderDesc": "拖动项目文件夹调整排序，顺序会保存并在切换对话时保持不变",
+    "reorderFailed": "排序保存失败，请重试",
     "deleteSessionTitle": "删除会话",
     "deleteSandboxTitle": "删除临时对话",
     "removeProjectTitle": "从列表移除项目"

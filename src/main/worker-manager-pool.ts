@@ -7,6 +7,9 @@ import type { WorkerInitResult, WorkerSlot } from './worker-manager-types'
 import { readMaxSessionWorkers, minutesToIdleDelayMs, readSessionWorkerIdleTimeoutMinutes } from './worker-pool-config'
 import { normalizeSessionKey, workspacePoolKey } from './worker-session-key'
 
+/** 低于该时长的快速回合不弹系统通知 (与旧 renderer 侧 run_idle 阈值一致) */
+const RUN_IDLE_ALERT_MIN_MS = 800
+
 function createSlot(
   poolKey: string,
   cwd: string,
@@ -26,6 +29,7 @@ function createSlot(
     initPromise: null,
     agentTurnActive: false,
     lastIdleAt: now,
+    lastRunStartedAt: null,
     lastForegroundAt: now,
     sdkFallback: false,
     autoRestartEnabled: true,
@@ -92,6 +96,17 @@ export function attachWorkerHandlers(
       agentTurnActive: boolean
     }) => void
     onSlotExit: (slot: WorkerSlot, code: number) => void
+    /**
+     * Agent 真正停下 (run idle/failed + settled)。由主进程直接发系统通知
+     * (不经 renderer, 避免前台/队列抑制导致的漏发), 并在点击时跳转对应会话。
+     */
+    onRunIdleSettled?: (payload: {
+      event: AppEvent
+      fromCwd: string
+      fromPoolKey: string
+      sessionFile: string | null
+      runDurationMs: number
+    }) => void
     /** When set, only forward extension UI from this pool key (X1). */
     getForegroundPoolKey?: () => string | null
   },
@@ -125,9 +140,29 @@ export function attachWorkerHandlers(
       if (ev?.type === 'run') {
         if (ev.phase === 'running' || ev.phase === 'started') {
           slot.agentTurnActive = true
+          slot.lastRunStartedAt = Date.now()
         } else if (ev.phase === 'idle' || ev.phase === 'failed' || ev.phase === 'cancelled') {
+          const wasActive = slot.agentTurnActive
           slot.agentTurnActive = false
           slot.lastIdleAt = Date.now()
+          // 直接发系统通知 (不排队): agent 停下且这一轮确实跑过 (wasActive + 时长过滤)
+          if (
+            (ev.phase === 'idle' || ev.phase === 'failed') &&
+            ev.settled === true &&
+            wasActive &&
+            slot.lastRunStartedAt
+          ) {
+            const runDurationMs = Date.now() - slot.lastRunStartedAt
+            if (runDurationMs >= RUN_IDLE_ALERT_MIN_MS) {
+              opts.onRunIdleSettled?.({
+                event: ev,
+                fromCwd: slot.cwd,
+                fromPoolKey: slot.poolKey,
+                sessionFile: slot.sessionFile,
+                runDurationMs,
+              })
+            }
+          }
         }
       }
       opts.onAppEvent({

@@ -1,5 +1,6 @@
 import { app, Notification, BrowserWindow } from 'electron'
 import { execFile } from 'child_process'
+import type { AppEvent } from '@shared/app-events'
 import { configStore } from './config-store'
 import { traceAudio } from './audio-trace'
 
@@ -11,6 +12,10 @@ export type DesktopAlertPayload = {
   body: string
   /** Background session finished; requires alertOnBackgroundRunIdle */
   background?: boolean
+  /** 点击通知时跳转到的会话路由 (run_idle 使用) */
+  workspaceId?: string
+  sessionFile?: string
+  sessionId?: string
 }
 
 function scenarioEnabled(kind: DesktopAlertKind, background?: boolean): boolean {
@@ -97,6 +102,18 @@ export function deliverDesktopAlert(win: BrowserWindow | null, payload: DesktopA
         if (win.isMinimized()) win.restore()
         win.show()
         win.focus()
+      }
+      // 点击通知 → 跳转到 pi app 对应对话 (主进程直接下发给 renderer)
+      if (win && !win.isDestroyed() && payload.sessionFile && payload.workspaceId) {
+        const nav: AppEvent = {
+          type: 'alert_open',
+          seq: 0,
+          workspaceId: payload.workspaceId,
+          sessionId: payload.sessionId,
+          sessionFile: payload.sessionFile,
+          timestamp: Date.now(),
+        }
+        win.webContents.send('ipc:events', nav)
       }
     })
     n.show()

@@ -254,10 +254,14 @@ export function registerModelRuntimeHandlers(): void {
     return { state: await workerManager.getState() }
   })
 
-  registerHandler('ipc:context.preview', async () => {
+  registerHandler('ipc:context.preview', async (req) => {
     if (!workerManager.isRunning) return { preview: null }
     try {
-      return { preview: await workerManager.getSessionContextPreview() }
+      // Scope to the viewed session. Without sessionFile (home/new-chat) the
+      // preview must be null — the foreground worker may still be bound to the
+      // previously-viewed conversation.
+      const sessionFile = (req as { sessionFile?: string } | undefined)?.sessionFile
+      return { preview: await workerManager.getSessionContextPreview(sessionFile) }
     } catch (e) {
       console.error('[IPC] context.preview failed:', e)
       return { preview: null }

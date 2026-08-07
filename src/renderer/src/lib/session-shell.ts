@@ -14,7 +14,10 @@ import { assertSessionNavigation } from '@renderer/lib/session-navigation'
 import { fetchSessionHistoryTail } from '@renderer/lib/session-history'
 import { sanitizeHistoryTimeline } from '@renderer/lib/timeline-dedupe'
 import { projectTimelineItems } from '@shared/timeline-projection'
-import { getLiveSessionTimeline } from '@renderer/lib/live-session-timeline-cache'
+import {
+  getLiveSessionTimeline,
+  liveSnapshotActive,
+} from '@renderer/lib/live-session-timeline-cache'
 import { mergeLiveTimelineWithHistoryTail } from '@renderer/lib/merge-live-history-timeline'
 import {
   applyLiveStreamingTextToMergedTimeline,
@@ -295,6 +298,7 @@ function mergeLiveIntoItems(sessionKey: string, diskItems: TimelineItem[]): Time
     diskItems,
     live.timelineItems,
     live.persistedEntryOverlap,
+    { liveActive: liveSnapshotActive(live) },
   )
   merged = applyLiveStreamingTextToMergedTimeline(
     merged,
@@ -554,7 +558,13 @@ export async function hydrateSessionView(
 
     if (focusedState?.timelineItems.length) {
       const focusedItems = projectTimelineItems(focusedState.timelineItems) as TimelineItem[]
-      const withFocusedTail = mergeLiveTimelineWithHistoryTail(projected, focusedItems)
+      const withFocusedTail = mergeLiveTimelineWithHistoryTail(projected, focusedItems, undefined, {
+        liveActive:
+          focusedState.streamingAssistantId != null ||
+          focusedState.optimisticPendingUserText != null ||
+          focusedState.agentTurnBootstrapping ||
+          focusedState.runState.status === 'running',
+      })
       merged = pickRicherTimeline(withFocusedTail, merged)
     }
 

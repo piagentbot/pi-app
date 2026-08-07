@@ -1,7 +1,7 @@
 // Worker Manager - multi-session utility process pool (sessionKey + workspace keys)
 
 import { type BrowserWindow } from 'electron'
-import type { AppEvent } from '@shared/app-events'
+import type { AppEvent, RunEvent } from '@shared/app-events'
 import type {
   WorkerCommandInfo,
   WorkerCompletionItem,
@@ -37,6 +37,7 @@ import {
   getSessionLeafOverride,
   setSessionLeafOverride,
 } from './session-leaf-override'
+import { deliverDesktopAlert } from './desktop-alerts'
 
 interface InitResult extends WorkerInitResult {}
 
@@ -166,6 +167,7 @@ export class WorkerManager {
       mainWindow: this.mainWindow,
       getForegroundPoolKey: () => this.foregroundPoolKey,
       onAppEvent: (p) => this.forwardAppEvent(p),
+      onRunIdleSettled: (p) => this.deliverRunIdleAlert(p),
       onSlotExit: (s, code) => this.handleSlotExit(s, code),
     })
 
@@ -226,6 +228,7 @@ export class WorkerManager {
       mainWindow: this.mainWindow,
       getForegroundPoolKey: () => this.foregroundPoolKey,
       onAppEvent: (p) => this.forwardAppEvent(p),
+      onRunIdleSettled: (p) => this.deliverRunIdleAlert(p),
       onSlotExit: (s, code) => this.handleSlotExit(s, code),
     })
 
@@ -254,6 +257,42 @@ export class WorkerManager {
       model: (live?.state as WorkerState)?.model as string | undefined,
       thinkingLevel: (live?.state as WorkerState)?.thinkingLevel as string | undefined,
     }
+  }
+
+  /**
+   * Agent 停下 (settled) 时由主进程直接发系统通知 — 不经 renderer,
+   * 不受前台/队列抑制影响; 通知携带会话路由, 点击后跳转对应对话。
+   */
+  private deliverRunIdleAlert(p: {
+    event: AppEvent
+    fromCwd: string
+    fromPoolKey: string
+    sessionFile: string | null
+    runDurationMs: number
+  }): void {
+    const win = this.mainWindow
+    if (!win || win.isDestroyed()) return
+    const ev = p.event as RunEvent
+    const background = this.foregroundPoolKey !== null && p.fromPoolKey !== this.foregroundPoolKey
+    const sec = Math.max(1, Math.round(p.runDurationMs / 1000))
+    const failed = ev.phase === 'failed'
+    deliverDesktopAlert(win, {
+      kind: 'run_idle',
+      title: failed
+        ? 'pi Desktop · 运行结束（失败）'
+        : background
+          ? 'pi Desktop · 后台会话结束'
+          : 'pi Desktop · 运行结束',
+      body: failed
+        ? 'Agent 运行失败已停止，点击查看'
+        : background
+          ? `有会话在后台运行结束（约 ${sec} 秒），点击查看`
+          : `Agent 已空闲（约 ${sec} 秒），点击查看`,
+      background,
+      workspaceId: ev.workspaceId || p.fromCwd,
+      sessionId: ev.sessionId,
+      sessionFile: p.sessionFile ?? ev.sessionFile,
+    })
   }
 
   private forwardAppEvent(payload: {
@@ -461,6 +500,21 @@ export class WorkerManager {
   }
 
   /**
+   * Wait for the foreground worker's agent turn to settle (bounded).
+   * Used by session.new so a new-chat first message isn't dropped with
+   * SESSION_BUSY while the previous conversation is still streaming.
+   */
+  async waitUntilIdle(timeoutMs = 60_000, pollMs = 250): Promise<boolean> {
+    const start = Date.now()
+    for (;;) {
+      const state = await this.getState().catch(() => null)
+      if (!state || !(state as { isStreaming?: boolean }).isStreaming) return true
+      if (Date.now() - start >= timeoutMs) return false
+      await new Promise((resolve) => setTimeout(resolve, pollMs))
+    }
+  }
+
+  /**
    * After Runtime creates a new session file (new/fork/clone), re-key the
    * foreground pool slot so subsequent RPCs hit the correct worker identity.
    */
@@ -585,9 +639,22 @@ export class WorkerManager {
     const r = await this.request('getCommands')
     return { commands: (r.commands as WorkerCommandInfo[]) || [], hasSession: !!r.hasSession }
   }
-  async getSessionContextPreview(): Promise<WorkerContextPreview> {
-    const r = await this.request('getSessionContextPreview')
-    return (r.preview as WorkerContextPreview) || null
+  /**
+   * Context preview for the VIEWED session only.
+   * With a sessionFile: query that session's worker slot if it exists (never spawn
+   * a worker just to preview). Without one (home / new-chat): there is nothing to
+   * preview — returning the foreground worker's context would leak the previous
+   * conversation's content into the new-chat screen.
+   */
+  async getSessionContextPreview(sessionFile?: string): Promise<WorkerContextPreview> {
+    if (sessionFile) {
+      const sk = normalizeSessionKey(sessionFile)
+      const slot = this.pool.get(sk)
+      if (!slot || slot.stopping) return null
+      const r = await this.requestOnSlot(slot, 'getSessionContextPreview')
+      return (r.preview as WorkerContextPreview) || null
+    }
+    return null
   }
   async getSkillsList(): Promise<WorkerSkillInfo[]> {
     const r = await this.request('getSkillsList')

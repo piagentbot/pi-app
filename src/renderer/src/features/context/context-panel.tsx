@@ -43,6 +43,7 @@ function roleMeta(role: string) {
 export function ContextPanel() {
   const { t } = useTranslation()
   const workspace = useUIStore((s) => s.currentWorkspace)
+  const historySessionFile = useUIStore((s) => s.historySessionFile)
   const model = useUIStore((s) => s.runState.model)
   const [preview, setPreview] = useState<ContextPreview | null>(null)
   const [contextWindow, setContextWindow] = useState<number | null>(null)
@@ -50,20 +51,27 @@ export function ContextPanel() {
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set())
 
   const load = () => {
-    if (!workspace) return
+    // Home / new-chat: nothing to preview. Never fall back to the foreground
+    // worker — it may still be bound to the previously-viewed conversation.
+    const file = useUIStore.getState().historySessionFile
+    if (!workspace || !file) {
+      setPreview(null)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     ipcClient
-      .invoke('context.preview')
+      .invoke('context.preview', { sessionFile: file })
       .then((r) => setPreview(r?.preview || null))
       .catch(() => setPreview(null))
       .finally(() => setLoading(false))
   }
 
   useEffect(() => {
-    // Context panel is only mounted while active; one-shot load on open / workspace change.
-    // Manual refresh remains available via the panel button; no idle polling.
+    // Context panel is only mounted while active; one-shot load on open / workspace
+    // / viewed-session change. Manual refresh remains available; no idle polling.
     load()
-  }, [workspace])
+  }, [workspace, historySessionFile])
 
   useEffect(() => {
     if (!workspace || !model) {
@@ -104,6 +112,17 @@ export function ContextPanel() {
     return (
       <div className="p-4 text-[13px] leading-relaxed text-foreground-secondary">
         {t('context:openProjectHint')}
+      </div>
+    )
+  }
+  if (!historySessionFile) {
+    // New-chat / home: no session is being viewed, so there is no context to show.
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
+        <MessageSquare className="h-8 w-8 text-foreground-secondary/25" />
+        <p className="text-[13px] leading-relaxed text-foreground-secondary/80">
+          {t('context:empty')}
+        </p>
       </div>
     )
   }
