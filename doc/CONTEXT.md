@@ -29,6 +29,23 @@ CLI 与 app 同开一会话时，CLI 追加 JSONL。检测到外部更新后，a
 ### TODO：实时思考过程同步（等待 pi 支持流式落盘）
 
 pi CLI 的会话 JSONL 是**消息级落盘**（磁盘无流式中间条目，thinking+text+toolCall 同一条消息一次性 append）。因此 app 同步 CLI 会话的粒度上限 = 每条消息完成，CLI 思考过程中 app 看不到中间状态。**等 pi 支持思考块逐块落盘后**再回来做实时思考同步。勿再优化 watcher debounce/轮询间隔（那是消息级延迟，不是思考级）。
+## 会话显示特性术语（glossary）
+
+- **过程内容（activity item）**：时间线里非对话正文的条目——思考块（thinking）、工具调用行（tool-call，含命令执行）、skill 调用块。与对话正文（user/assistant 气泡）相对。
+- **活动窗口（activity window）**：过程内容的滚动展开窗口，大小 N 可在设置中配置。默认折叠所有过程内容，仅**自动展开最新 N 个**；有新增过程内容时，超出窗口的最旧项回到折叠态。**用户手动展开/折叠优先于窗口**（窗口不强制折叠用户明确展开的项）。N=0 表示禁用窗口（保持纯手动行为）。整个时间线统一计数，不按回合分界。
+- **元事件条目（non-message entry）**：`model_change` / `thinking_level_change` 等非消息 JSONL 条目。默认不展示；设置开关打开后，在时间线中以一行小字展示（如「切换到 acme/example-model · thinking: high」），相邻的 model+thinking 变更合并为一条。
+- **skill 调用块（skill invocation）**：以 `<skill name="..." location="...">` 开头的独立用户消息（pi 把 skill 内容作为用户消息注入）。渲染为一行折叠摘要「调用 skill: <name>」，点击展开全文；**默认折叠、不受活动窗口 N 限制**；摘要层不显示 location 路径（含本机用户名，避免泄漏）。
+
+### 决策记录：活动窗口与 skill/元事件展示（2026）
+
+时间线可读性与信息容积的权衡：过程内容全展开则 AI 执行时刷屏，全折叠则看不到进展。定案：**默认折叠 + 滑动窗口自动展开最新 N 个 + 手动优先**（见 glossary「活动窗口」）；skill 调用块单独折叠（默认折叠、不受窗口限制）；元事件条目默认隐藏、开关可开。这三类均为纯展示层行为，**开关与 N 存放 app 私有 config-store，不进 pi settings**。
+## 会话归档术语（glossary）
+
+- **归档（archived）**：把会话从默认列表隐藏；元数据存 configStore（`Record<规范化会话文件路径, 归档时间戳>`），侧栏"已归档"视图可恢复/删除。归档会话收到新消息**不会**自动取消归档。
+
+### 决策记录：归档状态只用元数据，不移动文件（2026）
+
+会话文件路径是 TUI 与 app 共享的稳定定位键，移动/重命名会破坏 worker 绑定与树引用。因此**归档 = configStore `Record<路径, 时间戳>`**，文件原地不动。
 
 ## 进程边界
 
