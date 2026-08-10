@@ -46,6 +46,13 @@ pi CLI 的会话 JSONL 是**消息级落盘**（磁盘无流式中间条目，th
 ### 决策记录：归档状态只用元数据，不移动文件（2026）
 
 会话文件路径是 TUI 与 app 共享的稳定定位键，移动/重命名会破坏 worker 绑定与树引用。因此**归档 = configStore `Record<路径, 时间戳>`**，文件原地不动。
+## 会话管理特性术语（glossary）
+
+- **自动命名（auto-name）**：手动触发（重命名对话框内"自动生成"），用规则从会话首条用户消息提取标题（剥离行首 `/` 命令调用、剔除 URL 与文件路径——不适宜作标题、折叠空白、截断约 40~50 字），结果经 `session_info` 写入 JSONL（与 TUI `/name` 同机制），**不重命名会话文件或文件夹**。已有人工命名（存在 `session_info`）的会话点自动命名时覆盖。
+
+### 决策记录：会话标题只用元数据，不重命名文件（2026）
+
+会话文件路径（`~/.pi/agent/sessions/<编码cwd>/<时间戳>_<uuid>.jsonl`）是 TUI 与 app 共享的稳定定位键，重命名会破坏 `sessionDisplayNames` 键、worker 绑定、树引用等。因此：**标题 = JSONL `session_info`（TUI 可见）+ configStore overlay（app 本地）**。勿再考虑重命名会话文件/文件夹。
 
 ## 进程边界
 
