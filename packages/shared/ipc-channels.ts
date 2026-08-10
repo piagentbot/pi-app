@@ -90,6 +90,8 @@ export const IPC_INVOKE_CHANNELS = [
   'ipc:session.archive',
   'ipc:session.archiveBatch',
   'ipc:session.restoreBatch',
+  'ipc:session.autoNamePreview',
+
   'ipc:session.setEphemeralDraft',
   'ipc:session.setPendingBind',
   'ipc:session.setVisible',

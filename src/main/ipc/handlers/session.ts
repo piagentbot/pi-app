@@ -7,6 +7,7 @@ import { readSessionIdFromFile } from '../../session-file-meta'
 import { resolvePreparedSessionFile } from '../../session-prepare'
 import { clearSessionDisplayName, resolveSessionListTitle } from '../../session-display-names'
 import { archiveSession, archiveSessionsByRule, clearSessionArchive, getArchivedAt, restoreSession, restoreSessions, restoreSessionsByRule } from '../../session-archive'
+import { autoNameTitle } from '../../session-auto-name'
 import { renamePiSessionOnDisk } from '../../rename-pi-session'
 import {
   bindSandboxSession,
@@ -589,6 +590,15 @@ export function registerSessionHandlers(): void {
       return { ok: true, archived }
     } catch (e: unknown) {
       return { ok: false, error: errorMessage(e) || 'archiveBatch failed' }
+  registerHandler('ipc:session.autoNamePreview', async (req) => {
+    const file = (req.sessionFile as string | undefined)?.trim()
+    if (!file) return { ok: false, error: 'missing sessionFile' }
+    try {
+      const title = await autoNameTitle(file)
+      if (!title) return { ok: false, error: 'no title source' }
+      return { ok: true, title }
+    } catch (e: unknown) {
+      return { ok: false, error: errorMessage(e) || 'autoName failed' }
     }
   })
 
