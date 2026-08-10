@@ -56,6 +56,7 @@ function baseDraft(): SettingsDraft {
     maxSessionWorkers: 4,
     sessionWorkerIdleTimeoutMinutes: 15,
     timelineMaxAutoExpandedTools: 0,
+    showNonMessageEntries: false,
     extensionOverrides: {},
     rightPanelCatalog: [],
     rightPanelPrefs: {},
