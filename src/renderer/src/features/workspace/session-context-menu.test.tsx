@@ -43,12 +43,14 @@ describe('SessionContextMenuPortal mutations refresh the owning workspace', () =
 
   it('delete refreshes the owning workspace', async () => {
     invokeMock.mockResolvedValue({ ok: true })
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     const onSessionsChange = vi.fn()
     render(<SessionContextMenuPortal menu={MENU} onClose={() => {}} onSessionsChange={onSessionsChange} />)
 
     await act(async () => {
       fireEvent.click(screen.getByText('common:sidebar.delete'))
+    })
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'common:sidebar.delete' }).at(-1)!)
     })
 
     expect(invokeMock).toHaveBeenCalledWith('session.delete', {
@@ -118,7 +120,6 @@ describe('SessionContextMenuPortal mutations refresh the owning workspace', () =
       if (method === 'session.delete') return new Promise<unknown>((r) => (resolveDelete = r))
       return { ok: true }
     })
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     const onSessionRemoved = vi.fn()
     render(
       <SessionContextMenuPortal
@@ -131,6 +132,9 @@ describe('SessionContextMenuPortal mutations refresh the owning workspace', () =
 
     await act(async () => {
       fireEvent.click(screen.getByText('common:sidebar.delete'))
+    })
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'common:sidebar.delete' }).at(-1)!)
     })
 
     // 乐观移除在 IPC 完成前就已发生

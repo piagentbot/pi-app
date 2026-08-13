@@ -1,9 +1,8 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useUIStore } from '@renderer/stores/ui-store'
-import { ChevronRight, FolderOpen, Inbox, Plus } from '@renderer/components/icons'
-import { useExtensionUIStore } from '@renderer/stores/extension-ui-store'
 import { ChevronRight, Archive, FolderOpen, Inbox, Plus } from '@renderer/components/icons'
+import { useExtensionUIStore } from '@renderer/stores/extension-ui-store'
 import { ipcClient } from '@renderer/lib/ipc-client'
 import { toast } from 'sonner'
 import { activateWorkspace } from '@renderer/lib/activate-workspace'
@@ -25,7 +24,6 @@ import {
 } from './archived-context-menu'
 import { BatchRestoreDialog } from './batch-restore-dialog'
 import { refreshWorkspaceSessionLists } from '@renderer/lib/refresh-workspace-session-lists'
-import { sessionFilesEqual } from '@renderer/lib/session-file-key'
 import {
   diskProjectName,
   isSandboxPath,

@@ -79,7 +79,7 @@ export function ProjectContextMenuPortal({
         }
       }
       toast.success(t('common:sidebar.removed'))
-      onListChange(path)
+      onListChange(state.path)
     } catch (e) {
       toast.error(t('common:sidebar.removeFailed'))
     } finally {
@@ -156,7 +156,7 @@ export function ProjectContextMenuPortal({
           } else {
             toast.success(t('common:sidebar.batchArchived', { count }))
           }
-          onListChange(path)
+          onListChange(batchState?.path)
           onClose()
         }}
       />

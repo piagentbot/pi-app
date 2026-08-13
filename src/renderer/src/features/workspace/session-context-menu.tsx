@@ -83,7 +83,7 @@ export function SessionContextMenuPortal({
     }
     // 确认后立即乐观移除侧栏条目：删除 IPC 要等 worker 重建 runtime，不让 UI 干等；
     // 完成或失败后再以整列表刷新校准。
-    onSessionRemoved?.({ sessionFile: target.sessionFile, workspacePath: target.workspacePath })
+    onSessionRemoved?.({ sessionFile: target.sessionFile ?? '', workspacePath: target.workspacePath })
     try {
       const r = await ipcClient.invoke('session.delete', {
         sessionFile: target.sessionFile,

@@ -193,6 +193,7 @@ export function SandboxContextMenuPortal({
           }
           onListChange()
         }}
+      />
       <ConfirmDialog
         open={!!deleteState}
         title={t('common:sidebar.deleteSandboxTitle')}

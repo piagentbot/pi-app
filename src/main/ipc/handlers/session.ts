@@ -593,6 +593,9 @@ export function registerSessionHandlers(): void {
       return { ok: true, archived }
     } catch (e: unknown) {
       return { ok: false, error: errorMessage(e) || 'archiveBatch failed' }
+    }
+  })
+
   registerHandler('ipc:session.autoNamePreview', async (req) => {
     const file = (req.sessionFile as string | undefined)?.trim()
     if (!file) return { ok: false, error: 'missing sessionFile' }
