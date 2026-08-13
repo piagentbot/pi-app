@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Archive, Pencil, Trash2 } from '@renderer/components/icons'
-import { Pencil, Trash2 } from '@renderer/components/icons'
 import { ConfirmDialog } from '@renderer/components/ui/confirm-dialog'
 import { ipcClient } from '@renderer/lib/ipc-client'
 import { useUIStore } from '@renderer/stores/ui-store'
@@ -17,9 +16,8 @@ import { RenamePromptDialog } from './rename-prompt-dialog'
 import { BatchArchiveDialog } from './batch-archive-dialog'
 
 type MenuState = { x: number; y: number; path: string; label: string; sessionFile?: string } | null
-type RenameState = { path: string; label: string } | null
-type DeleteState = { path: string; label: string } | null
 type RenameState = { path: string; label: string; sessionFile?: string } | null
+type DeleteState = { path: string; label: string } | null
 
 export function SandboxContextMenuPortal({
   menu,
@@ -203,6 +201,7 @@ export function SandboxContextMenuPortal({
         busy={deleting}
         onConfirm={() => void confirmDelete()}
         onCancel={() => setDeleteState(null)}
+
       />
     </>
   )

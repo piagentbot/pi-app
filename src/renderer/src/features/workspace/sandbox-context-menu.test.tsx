@@ -23,16 +23,11 @@ const BATCH = 'common:sidebar.batchArchive'
 const MENU = { x: 10, y: 10, path: '/sandbox-workspaces/abc', label: '临时对话 abc', sessionFile: '/sandbox-workspaces/abc/s.jsonl' }
 
 describe('SandboxContextMenuPortal batch archive', () => {
-const MENU = { x: 10, y: 10, path: '/sandbox-workspaces/abc', label: '临时对话 abc', sessionFile: '/sandbox-workspaces/abc/s.jsonl' }
-
-describe('SandboxContextMenuPortal rename auto-name', () => {
   afterEach(() => {
     invokeMock.mockClear()
   })
 
   it('offers 批量归档 in the right-click menu and keeps the dialog open after menu close', async () => {
-  it('offers 自动生成 in the rename dialog when a session file is bound', async () => {
-    invokeMock.mockResolvedValue({ ok: true, title: '帮我修 bug' })
     const onClose = vi.fn()
     const { rerender } = render(
       <SandboxContextMenuPortal menu={MENU} onClose={onClose} onListChange={() => {}} />,
@@ -73,6 +68,21 @@ describe('SandboxContextMenuPortal rename auto-name', () => {
     })
     expect(onListChange).toHaveBeenCalled()
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+})
+
+describe('SandboxContextMenuPortal rename auto-name', () => {
+  afterEach(() => {
+    invokeMock.mockClear()
+  })
+
+  it('offers 自动生成 in the rename dialog when a session file is bound', async () => {
+    invokeMock.mockResolvedValue({ ok: true, title: '帮我修 bug' })
+    const onClose = vi.fn()
+    const { rerender } = render(
+      <SandboxContextMenuPortal menu={MENU} onClose={onClose} onListChange={() => {}} />,
+    )
+    await act(async () => {
       fireEvent.click(screen.getByText('common:sidebar.rename'))
     })
     rerender(<SandboxContextMenuPortal menu={null} onClose={onClose} onListChange={() => {}} />)

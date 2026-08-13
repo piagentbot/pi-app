@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Archive, FolderOpen, ListX } from '@renderer/components/icons'
-import { FolderOpen, ListX } from '@renderer/components/icons'
 import { ConfirmDialog } from '@renderer/components/ui/confirm-dialog'
 import { ipcClient } from '@renderer/lib/ipc-client'
 import { useUIStore } from '@renderer/stores/ui-store'
@@ -88,8 +87,7 @@ export function ProjectContextMenuPortal({
     }
   }
 
-  if (!menu && !batchState) return null
-  if (!menu && !removeState) return null
+  if (!menu && !batchState && !removeState) return null
 
   return createPortal(
     <>
@@ -160,33 +158,6 @@ export function ProjectContextMenuPortal({
           onClose()
         }}
       />
-    </>,
-      <button
-        type="button"
-        className={contextMenuItemClass}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation()
-          void runRevealInExplorer(menu.path)
-        }}
-      >
-        <FolderOpen className="h-3 w-3 shrink-0" strokeWidth={2} />
-        {t('common:sidebar.revealInExplorer')}
-      </button>
-      <button
-        type="button"
-        className={contextMenuDangerItemClass}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation()
-          void runRemove(menu.path, menu.name)
-        }}
-      >
-        <ListX className="h-3 w-3 shrink-0" strokeWidth={2} />
-        {t('common:sidebar.removeFromList')}
-      </button>
-        </div>
-      )}
       <ConfirmDialog
         open={!!removeState}
         title={t('common:sidebar.removeProjectTitle')}
