@@ -39,6 +39,24 @@ watcher/轮询通知只代表"文件变了"，不代表一定有外部 CLI 在�
 
 pi CLI 的会话 JSONL 是**消息级落盘**（磁盘无流式中间条目，thinking+text+toolCall 同一条消息一次性 append）。因此 app 同步 CLI 会话的粒度上限 = 每条消息完成，CLI 思考过程中 app 看不到中间状态。**等 pi 支持思考块逐块落盘后**再回来做实时思考同步。勿再优化 watcher debounce/轮询间隔（那是消息级延迟，不是思考级）。
 
+## 对话文件汇总术语（glossary）
+
+- **对话文件汇总（turn file summary）**：每个已完成回合保留的改动文件卡片。单击文件行在卡片内展开或收起该回合的**最终净 diff**；文件行同时提供打开文件、复制路径和进入 Git Review 的独立操作。
+- **回合文件基线（turn file baseline）**：某文件在本回合第一次修改之前的内容状态。回合结束后用最终文件状态与该基线比较，生成最终净 diff；中间多次编辑默认不展示。
+- **最终净 diff（final net diff）**：文件回合结束状态相对于回合文件基线的差异。它不等同于当前工作区相对 `HEAD` 的 Git diff，也不展示本回合内已被后续编辑抵消的中间变化。
+- **汇总路径操作（summary path actions）**：文件汇总中面向路径的快捷操作。默认复制绝对路径；复制工作区相对路径、在文件夹中显示等低频操作放在二级菜单。
+
+### 决策记录：回合最终净 diff 用 Worker 内存基线结算（2026）
+
+每个已完成回合保留文件汇总卡片；单击文件行展开该回合的**最终净 diff**。实现：Worker 在 edit/write/insert 等可提取路径的修改工具**执行前**读原文件建基线（每文件每回合首次为准，只放内存、不写临时文件、不写会话 JSONL），`turn_end` / `agent_settled` 时读最终文件，用 `diff` 库生成 unified diff 发出 `turn_diff` 事件；成功/失败/中止都结算，净零变化不产出条目。**持久化**：基线不持久化（进程周期内有效）；结算后的 diff 文本由主进程写 app 私有数据目录 `userData/turn-diffs/`（每会话最多 50 条），重启后由 `session.getTurnDiffs` 恢复——不写会话 JSONL。限制：单文件快照上限默认 1 MiB（设置 0–16 MiB，0=关闭，Worker 初始化时读取、重启生效）、二进制不缓存、超出工作区不缓存、每回合预算 = 单文件上限×16 封顶 64 MiB、diff 文本 256KB/3000 行截断；未缓存文件在卡片中给出原因（超限/二进制/工作区外/不可读/预算）。**匹配链**（精确→降级）：turnId → runId → 回合序号（Worker 每个 turn_start 占号，与视图回合序号对齐）→ 仅视图最后一个已完成回合允许用该会话最新记录兜底。**无净 diff 记录的回退**：用回合工具记录（JSONL 自带的 edit/write 参数）渲染逐操作 diff（标注「来自工具记录」）；连工具记录都没有时行点击直接打开文件。**结算必须等待本回合在飞捕获完成**（pendingOps 计数），否则 turn_end 早于 stat/read 完成时会静默丢 diff。中间逐操作过程不另建界面（时间线工具行已有）。
+
+### 决策记录：右栏导航用 store 意图，不再依赖瞬时 CustomEvent（2026）
+
+Review / Files 面板是懒加载组件；先切面板再同步派发 CustomEvent 时，事件会在面板挂载前丢失（"点击无反应"根因）。改为 ui-store 中的一次性导航意图（panel + scope + path + seq），面板挂载后用模块级已消费 seq 消费一次（防卸载重挂重复消费），同时保留 CustomEvent 作为已挂载时的即时通道（双通道幂等）。Review 打开时统一切到 git scope（该 scope 才有真实 diff；turn/session scope 只有文件元数据）。**三个坑（勿回退）**：
+1. `React.StrictMode` 双跑 effect 时，Files 面板的 `resetTabs()` 挂载 effect 会把意图 effect 刚打开的文件清掉——挂载首跑必须跳过 reset（用 ref 记录已见 workspaceRoot）。
+2. `FileDiffView` 的展开态是 `useState(defaultOpen)` 只在挂载时生效——面板已挂载时新焦点请求必须用 focusToken 递增触发 effect 重新展开。
+3. `parseGitStatus` 不能对整串 `trim()`：porcelain v1 第一行的行首状态空格会被吃掉，第一个未暂存文件（`' M path'`）路径残缺（`rc/...` 样式）永远匹配不上焦点路径，表现为「点击某文件的 git review 无效」。按行清洗（仅去 `\r`），保留行首状态列。
+
 ## 会话显示特性术语（glossary）
 
 - **过程内容（activity item）**：时间线里非对话正文的条目——思考块（thinking）、工具调用行（tool-call，含命令执行）、skill 调用块。与对话正文（user/assistant 气泡）相对。

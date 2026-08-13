@@ -48,6 +48,7 @@ function draft(): SettingsDraft {
     sessionWorkerIdleTimeoutMinutes: 15,
     timelineMaxAutoExpandedTools: 3,
     showNonMessageEntries: false,
+    turnDiffSnapshotMaxBytes: 1024 * 1024,
     extensionOverrides: {},
     rightPanelCatalog: [],
     rightPanelPrefs: {},

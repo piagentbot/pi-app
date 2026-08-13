@@ -56,6 +56,7 @@ export type SettingsDraft = {
   sessionWorkerIdleTimeoutMinutes: number
   timelineMaxAutoExpandedTools: number
   showNonMessageEntries: boolean
+  turnDiffSnapshotMaxBytes: number
   extensionOverrides: Record<string, boolean>
   rightPanelCatalog: RightPanelCatalogItem[]
   rightPanelPrefs: RightPanelPrefs
@@ -128,6 +129,7 @@ export function draftSignature(d: SettingsDraft): string {
     sessionWorkerIdleTimeoutMinutes: d.sessionWorkerIdleTimeoutMinutes,
     timelineMaxAutoExpandedTools: d.timelineMaxAutoExpandedTools,
     showNonMessageEntries: d.showNonMessageEntries,
+    turnDiffSnapshotMaxBytes: d.turnDiffSnapshotMaxBytes,
     extensionOverrides: d.extensionOverrides,
     rightPanelPrefs: d.rightPanelPrefs,
     rightPanelOrder: d.rightPanelOrder,
@@ -169,6 +171,7 @@ export async function loadSettingsDraftFromDisk(i18nLanguage: string): Promise<S
     sessionWorkerIdleTimeoutMinutes: normalizeIdleTimeoutMinutesUi(s.sessionWorkerIdleTimeoutMinutes),
     timelineMaxAutoExpandedTools: normalizeTimelineMaxAutoExpandedTools(s.timelineMaxAutoExpandedTools),
     showNonMessageEntries: s.showNonMessageEntries === true,
+    turnDiffSnapshotMaxBytes: normalizeTurnDiffSnapshotBytesUi(s.turnDiffSnapshotMaxBytes),
     extensionOverrides: { ...(s.extensionOverrides || {}) },
     rightPanelCatalog: cat,
     rightPanelPrefs: prefs,
@@ -207,6 +210,13 @@ export function normalizeIdleTimeoutMinutesUi(raw: unknown): number {
   if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) return 15
   if (n > Number.MAX_SAFE_INTEGER) return Number.MAX_SAFE_INTEGER
   return n
+}
+
+/** 单文件回合 diff 快照上限（UI 档位：0 / 512KB / 1MB / 2 / 4 / 8 / 16 MiB）。 */
+export function normalizeTurnDiffSnapshotBytesUi(raw: unknown): number {
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return 0
+  return Math.min(16 * 1024 * 1024, Math.floor(n))
 }
 
 /**
@@ -314,6 +324,10 @@ export async function commitSettingsDraft(draft: SettingsDraft, i18n: I18n): Pro
   await ipcClient.invoke('settings.set', {
     key: 'showNonMessageEntries',
     value: draft.showNonMessageEntries,
+  })
+  await ipcClient.invoke('settings.set', {
+    key: 'turnDiffSnapshotMaxBytes',
+    value: normalizeTurnDiffSnapshotBytesUi(draft.turnDiffSnapshotMaxBytes),
   })
   await ipcClient.invoke('settings.set', { key: 'extensionOverrides', value: draft.extensionOverrides })
   await ipcClient.invoke('rightPanels.saveLayout', {

@@ -24,6 +24,7 @@ import { applyComposerDisplayMeta } from '@renderer/lib/session-display-meta'
 import { reportVisibleSession } from '@renderer/lib/visible-session-report'
 import { getSessionComposerWidget } from '@renderer/lib/extension-widget-cache'
 import { resetExternalSessionSync } from '@renderer/lib/session-external-update'
+import { loadTurnDiffsForSession } from '@renderer/stores/turn-diff-store'
 import { useUIStore } from '@renderer/stores/ui-store'
 import type { RunState, TimelineItem } from '@renderer/stores/ui-store-types'
 import { flushStreamPendingSync } from '@renderer/stores/ui-store-stream'
@@ -369,6 +370,8 @@ export function focusSessionSync(sessionId: string, sessionFile: string): {
   // 切换会话：外部同步状态与在飞读取立即作废（不跨会话继承 active/error）
   if (focusKey && !sessionFilesEqual(focusKey, sessionKey)) resetExternalSessionSync()
   focusKey = sessionKey
+  // 恢复本会话持久化的回合最终净 diff（turn-diffs 目录；失败静默降级）
+  void loadTurnDiffsForSession(sessionFile)
 
   let view = views.get(sessionKey)
   if (!view) {
