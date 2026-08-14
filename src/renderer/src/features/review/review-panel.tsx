@@ -209,7 +209,7 @@ export function ReviewPanel() {
         ) : empty ? (
           <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
             <p className="text-[12px] text-foreground-secondary/70">{t('review:empty')}</p>
-            {scope === 'git' && gitData?.isRepo !== false && (
+            {scope === 'git' && (
               <p className="max-w-[240px] text-[11px] text-muted-foreground/60">{t('review:emptyGitHint')}</p>
             )}
           </div>

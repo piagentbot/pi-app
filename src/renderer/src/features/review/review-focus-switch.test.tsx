@@ -28,6 +28,7 @@ const { invoke } = vi.hoisted(() => {
             '-old-b',
             '+new-b',
           ].join('\n'),
+          stagedRaw: '',
           branch: 'main',
         },
       }
@@ -68,6 +69,8 @@ describe('ReviewPanel focus switching between files', () => {
         { id: 'review', labelKey: 'p', fallbackLabel: 'Review', description: '', source: 'core' },
         { id: 'files', labelKey: 'f', fallbackLabel: 'Files', description: '', source: 'core' },
       ] as never,
+      fileChanges: [],
+      timelineItems: [],
     })
   })
 
@@ -104,6 +107,7 @@ describe('ReviewPanel focus switching between files', () => {
             isRepo: true,
             status: '?? new.md\n',
             raw: '', // 未跟踪文件不在 git diff 输出里
+            stagedRaw: '',
             branch: 'main',
           },
         }
