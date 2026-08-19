@@ -148,6 +148,29 @@ Trellis：`07-01-fmsm-remediate-a` 已归档 `archive/2026-07/`。威胁模型�
 - **配置表单实现约束**：字段说明放 adapter 配置（沿用 builtin/用户/项目三层覆盖），不改 npm 包；写回走 pi SDK 设置语义（合并+锁），与终端版不冲突；先静态 schema MVP，动态选项后置。
 - **M2 拆两段**：先搜索/安装/卸载（1 个月内），后配置表单（随后 1–2 个月）。
 
+## 模型作用域术语（glossary，2026 访谈确认）
+
+- **会话模型（session model）**：当前会话使用的模型，写入会话 JSONL 的 `model_change` 条目，按会话持久化；重新打开会话时从会话文件恢复。
+- **全局默认模型（global default model）**：pi 配置里 `defaultProvider` / `defaultModel`，决定新会话的初始模型；**只由设置页修改**。
+
+### 决策记录：会话内切模型不写全局默认（2026）
+
+pi SDK 的 `AgentSession.setModel()` 会**双写**：会话模型（`agent.state.model` + `appendModelChange`）与全局默认（`settingsManager.setDefaultModelAndProvider`）。上游 pi CLI 的 `/model` 就是这语义（模型选择器代码里注释过「上游语义」），但桌面端有独立的设置页默认模型选择器——静默改写全局默认是意外副作用（在会话 A 切模型 → 新会话 B 莫名继承、设置页默认被改）。定案：**worker `handleSetmodel` 在 `setModel` 前后快照/还原全局默认**（还原前先比较，无变化不写盘；失败路径同样还原，覆盖 SDK 写默认后抛错的场景）。会话 JSONL 已按会话持久化模型，还原不影响会话自身。**已知同类问题（未在本轮处理）**：`setThinkingLevel` 同样会写 `defaultThinkingLevel`，可后续按同一模式加还原。
+
+## composer 撤销 / 光标术语（glossary，2026 访谈确认）
+
+- **原生编辑（native edit）**：浏览器自己执行的输入（输入法组合、原生 Shift+Enter、原生粘贴），参与 Chromium 的 contenteditable 撤销栈。
+- **程序化插入（programmatic insert）**：JS 手动改 DOM（`insertTextAtCursor`、直接 `insertNode`、JS 调 `execCommand('insertText')`）——**会污染原生撤销栈**：之后按 Ctrl+Z 会把整个输入（含粘贴前输入的内容）整段清空。只有浏览器自己执行的插入可正常撤销/重做。
+- **行首光标卡住（line-start caret stick）**：孤立 `<br>`（或 `<div>` 边界）之后的文本行开头，按 ← 键会把光标弹回本行末尾并卡住，永远到不了上一行。`<br>` 后紧跟一个 ZWSP（零宽字符）即可正常跨行——ZWSP 不显示、`serializeRichInput` 会剥掉。
+
+### 决策记录：纯文本粘贴走浏览器原生插入（2026）
+
+composer 曾对纯文本粘贴 `preventDefault` 后手动插 DOM——实测（真实 Chromium 回归脚本 `scripts/regression/composer-undo.mjs`）这会污染撤销栈：输入 "abc" 后粘贴 "hello world"，再 Ctrl+Z 会**清空整个输入**而非回到 "abc"。定案：**纯文本/富文本粘贴一律不拦截**（`useComposerAttachments.handlePaste` 只对文件/图片类 `preventDefault`），让浏览器原生插入保住撤销栈；富文本（Word/网页）来源的块级包装标签（div/p/li 等）由 `serializeRichInput` 按换行处理，不动 DOM 就不破坏撤销。**附件 chip 用 `execCommand('insertHTML')` 插入**（原生命令，可单独 Ctrl+Z 撤掉；jsdom 无 execCommand 时走手动兜底）。**Shift+Enter 同样改走原生**（不再手动插 br）。已知代价：图片+文字组合粘贴（chip+文本）仍为程序化插入，该组合的撤销不完美，属低频。
+
+### 决策记录：所有 `<br>` 统一补 ZWSP 光标锚点（2026）
+
+行首光标卡住的根因是孤立 `<br>`（来源：`renderRichTextFromPlain`/`renderRichFromSegments` 重建 DOM、原生 Shift+Enter、原生多行粘贴——原生多行纯文本粘贴实测插入单个含 `\n` 的文本节点，无 br）。定案：**新增 `anchorLineBreakCaret`（composer-editor-caret.ts），在两个 DOM 重建函数末尾 + rich-input 每次 input 事件后调用**（已带锚点的行跳过）。实测：粘贴后补锚点**不破坏**原生撤销（Ctrl+Z 仍只撤掉粘贴内容）。
+
 ## 斜杠命令拦截术语（glossary，2026-08-18 访谈确认）
 
 - **内置命令泄漏（builtin leak）**：pi 内置斜杠命令（如 `/reload`、`/export`、`/login`）被桌面端当作普通聊天文本发给模型——命令既不执行也无任何提示。根因：pi 内置命令只在 TUI 层拦截（`interactive-mode.js` 的 submit 链），SDK 层 `session.prompt()` 只处理扩展命令/skill/模板，内置命令会原样落到 LLM；桌面端不用 TUI，必须自己拦截。曾误以为 `/compact` 按钮已生效——它此前走 `runExtensionCommand('/compact')`，同样把文本发给了模型，属于同一种泄漏。
