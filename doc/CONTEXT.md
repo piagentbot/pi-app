@@ -155,7 +155,7 @@ Trellis：`07-01-fmsm-remediate-a` 已归档 `archive/2026-07/`。威胁模型�
 
 ### 决策记录：会话内切模型不写全局默认（2026）
 
-pi SDK 的 `AgentSession.setModel()` 会**双写**：会话模型（`agent.state.model` + `appendModelChange`）与全局默认（`settingsManager.setDefaultModelAndProvider`）。上游 pi CLI 的 `/model` 就是这语义（模型选择器代码里注释过「上游语义」），但桌面端有独立的设置页默认模型选择器——静默改写全局默认是意外副作用（在会话 A 切模型 → 新会话 B 莫名继承、设置页默认被改）。定案：**worker `handleSetmodel` 在 `setModel` 前后快照/还原全局默认**（还原前先比较，无变化不写盘；失败路径同样还原，覆盖 SDK 写默认后抛错的场景）。会话 JSONL 已按会话持久化模型，还原不影响会话自身。**已知同类问题（未在本轮处理）**：`setThinkingLevel` 同样会写 `defaultThinkingLevel`，可后续按同一模式加还原。
+pi SDK 的 `AgentSession.setModel()` 会**双写**：会话模型（`agent.state.model` + `appendModelChange`）与全局默认（`settingsManager.setDefaultModelAndProvider`）。上游 pi CLI 的 `/model` 就是这语义（模型选择器代码里注释过「上游语义」），但桌面端有独立的设置页默认模型选择器——静默改写全局默认是意外副作用（在会话 A 切模型 → 新会话 B 莫名继承、设置页默认被改）。定案：**worker `handleSetmodel` 在 `setModel` 前后快照/还原全局默认**（还原前先比较，无变化不写盘；失败路径同样还原，覆盖 SDK 写默认后抛错的场景）。会话 JSONL 已按会话持久化模型，还原不影响会话自身。**`handleSetthinkinglevel` 同理**：SDK 的 `setThinkingLevel` 也会写 `defaultThinkingLevel`，同样快照/还原（无配置时不写）。
 
 ## composer 撤销 / 光标术语（glossary，2026 访谈确认）
 
